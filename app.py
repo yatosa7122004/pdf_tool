@@ -3,25 +3,51 @@ from pypdf import PdfReader, PdfWriter
 from PIL import Image
 import io
 
-# ページ設定
-st.set_page_config(page_title="万能PDFツール", layout="centered")
-st.title("📄 万能PDFツール")
+# --- 設定: スマホで見やすくするおまじない ---
+st.set_page_config(page_title="PDFツール", layout="centered")
 
-# タブで機能を切り替え
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📂 結合", 
-    "✂️ 抽出", 
-    "🗑️ 削除", 
-    "🖼️ 画像PDF化",
-    "🔒 ロック"
-])
+# CSSで余白を削り、見た目をスマホアプリ風にする
+st.markdown("""
+    <style>
+        /* 全体の余白を減らす */
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        /* ヘッダーとフッターを消す */
+        header {visibility: hidden;}
+        footer {visibility: hidden;}
+        /* ボタンを少し大きくして押しやすく */
+        .stButton>button {
+            width: 100%;
+            border-radius: 10px;
+            height: 3em;
+            font-weight: bold;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("📱 万能PDFツール")
+
+# --- メニュー選択（スマホ最適化） ---
+# タブではなく「セレクトボックス」にすることで、親指で操作しやすくする
+menu = st.selectbox(
+    "機能を選んでください",
+    ["📂 PDF結合", "✂️ ページ抽出", "🗑️ ページ削除", "🖼️ 画像PDF化", "🔒 パスワード設定"]
+)
+
+st.divider() # 区切り線
 
 # --- 1. 結合 (Merge) ---
-with tab1:
-    st.header("複数のPDFを1つにまとめる")
-    uploaded_files = st.file_uploader("PDFを選択（複数可）", type="pdf", accept_multiple_files=True, key="merge")
+if menu == "📂 PDF結合":
+    st.header("複数のPDFを結合")
+    uploaded_files = st.file_uploader("結合したいファイルを順番に選択", type="pdf", accept_multiple_files=True, key="merge")
+    
     if uploaded_files:
-        if st.button("結合する", key="btn_merge"):
+        st.write(f"現在 {len(uploaded_files)} 個のファイルを選択中")
+        if st.button("結合してダウンロード"):
             merger = PdfWriter()
             for pdf in uploaded_files:
                 reader = PdfReader(pdf)
@@ -31,102 +57,94 @@ with tab1:
             output = io.BytesIO()
             merger.write(output)
             output.seek(0)
-            st.download_button("ダウンロード", output, "merged.pdf", "application/pdf")
+            st.success("完了しました！")
+            st.download_button("PDFを保存", output, "merged.pdf", "application/pdf")
 
 # --- 2. 抽出 (Extract) ---
-with tab2:
-    st.header("必要なページだけ取り出す")
+elif menu == "✂️ ページ抽出":
+    st.header("必要なページを抽出")
     target_file = st.file_uploader("PDFを選択", type="pdf", key="extract")
+    
     if target_file:
         reader = PdfReader(target_file)
         total = len(reader.pages)
-        st.info(f"全 {total} ページあります")
+        st.info(f"全 {total} ページ")
         
-        selected = st.multiselect("残したいページを選択", range(1, total + 1), key="sel_ext")
+        selected = st.multiselect("残すページを選択", range(1, total + 1), key="sel_ext")
         
-        if st.button("抽出する", key="btn_ext"):
+        if st.button("抽出してダウンロード"):
             if selected:
                 writer = PdfWriter()
                 for p in selected:
                     writer.add_page(reader.pages[p-1])
-                
                 output = io.BytesIO()
                 writer.write(output)
                 output.seek(0)
-                st.download_button("ダウンロード", output, "extracted.pdf", "application/pdf")
+                st.download_button("PDFを保存", output, "extracted.pdf", "application/pdf")
             else:
-                st.error("ページを選んでください")
+                st.error("ページを選んでね")
 
 # --- 3. 削除 (Delete) ---
-with tab3:
-    st.header("不要なページを削除する")
+elif menu == "🗑️ ページ削除":
+    st.header("不要なページを削除")
     target_del = st.file_uploader("PDFを選択", type="pdf", key="delete")
+    
     if target_del:
         reader = PdfReader(target_del)
         total = len(reader.pages)
-        st.info(f"全 {total} ページあります")
+        st.info(f"全 {total} ページ")
         
-        # 削除したいページを選択
-        delete_pages = st.multiselect("削除したいページを選択", range(1, total + 1), key="sel_del")
+        delete_pages = st.multiselect("消すページを選択", range(1, total + 1), key="sel_del")
         
-        if st.button("削除して保存", key="btn_del"):
+        if st.button("削除してダウンロード"):
             if delete_pages:
                 writer = PdfWriter()
-                # 選ばれていないページだけを追加する
                 for i in range(total):
                     if (i + 1) not in delete_pages:
                         writer.add_page(reader.pages[i])
-                
                 output = io.BytesIO()
                 writer.write(output)
                 output.seek(0)
-                st.download_button("ダウンロード", output, "deleted.pdf", "application/pdf")
+                st.download_button("PDFを保存", output, "deleted.pdf", "application/pdf")
             else:
-                st.error("削除するページを選んでください")
+                st.error("ページを選んでね")
 
-# --- 4. 画像PDF化 (Image to PDF) ---
-with tab4:
+# --- 4. 画像PDF化 ---
+elif menu == "🖼️ 画像PDF化":
     st.header("画像をPDFに変換")
-    st.write("スマホで撮った写真やスクショをまとめてPDFにします。")
     img_files = st.file_uploader("画像を選択（複数可）", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key="img")
     
     if img_files:
-        if st.button("PDFに変換", key="btn_img"):
-            # 画像を開いてリストにする
+        st.write(f"{len(img_files)} 枚の画像を選択中")
+        if st.button("PDFに変換して保存"):
             images = []
             for img_file in img_files:
                 img = Image.open(img_file)
-                # 色モードをRGBに変換（PNGの透過対策など）
                 if img.mode != "RGB":
                     img = img.convert("RGB")
                 images.append(img)
             
             output = io.BytesIO()
-            # 1枚目をベースに残りを追加して保存
             images[0].save(output, format="PDF", save_all=True, append_images=images[1:])
             output.seek(0)
-            st.download_button("ダウンロード", output, "images.pdf", "application/pdf")
+            st.success("変換完了！")
+            st.download_button("PDFを保存", output, "images.pdf", "application/pdf")
 
-# --- 5. パスワード設定 (Security) ---
-with tab5:
-    st.header("パスワードをかける")
+# --- 5. ロック (Security) ---
+elif menu == "🔒 パスワード設定":
+    st.header("パスワード設定")
     target_lock = st.file_uploader("PDFを選択", type="pdf", key="lock")
-    password = st.text_input("設定するパスワード", type="password")
+    password = st.text_input("パスワードを入力", type="password")
     
     if target_lock and password:
-        if st.button("ロックする", key="btn_lock"):
+        if st.button("ロックして保存"):
             reader = PdfReader(target_lock)
             writer = PdfWriter()
-            
-            # 全ページをコピー
             for page in reader.pages:
                 writer.add_page(page)
-            
-            # パスワード設定
             writer.encrypt(password)
-            
             output = io.BytesIO()
             writer.write(output)
             output.seek(0)
-            st.success("ロック完了！")
-            st.download_button("ダウンロード", output, "locked.pdf", "application/pdf")
+            st.success("ロックしました！")
+            st.download_button("PDFを保存", output, "locked.pdf", "application/pdf")
